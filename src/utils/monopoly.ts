@@ -149,6 +149,13 @@ export const getPlayerOwnTransportationCount = (player: IPlayerState) => {
 
 export const handleAiTurn = async (game: IGame, currentPlayerIndex: number) => {
   await timeout(1000);
+  const finishPlayerTurn = await handleAiInsufficientBalance(
+    game,
+    currentPlayerIndex
+  );
+  if (finishPlayerTurn) {
+    return rotateNextPlayer(game);
+  }
   const currentPlayer = game.players[currentPlayerIndex];
   const { total, numbers } = await playerRollDice(
     game._id.toString(),
@@ -226,7 +233,7 @@ export const handleAiTurn = async (game: IGame, currentPlayerIndex: number) => {
         }
       }
     } else {
-      const owner = game.players[gameProperty.owner];
+      const owner = game.players[gameProperty.owner!];
       const ownerProperty = owner.properties.find(
         (p) => p.index == gameProperty.index
       )!;
@@ -340,7 +347,7 @@ export const buyProperty = async (
     houseCount: 0,
     hotelCount: 0,
   });
-  sortPlayerPropertiesByMostProfit(player.properties);
+  sortPlayerPropertiesByLeastProfit(player.properties);
   if (price == 0) {
     player.balance -= properties[propertyIndex].price;
   } else {
@@ -383,7 +390,7 @@ export const buyHouseOrHotel = async (
     } else {
       playerOwnProperty!.hotelCount++;
     }
-    sortPlayerPropertiesByMostProfit(player.properties);
+    sortPlayerPropertiesByLeastProfit(player.properties);
     await updateGameByFilter({ _id: game._id }, { players: game.players });
     await emitEvent([game._id.toString()], `player-buy-${houseOrhotel}`, {
       playerIndex,
@@ -394,6 +401,16 @@ export const buyHouseOrHotel = async (
 };
 
 export const rotateNextPlayer = async (game: IGame): Promise<void> => {
+  if (isOnlyOnePlayerLeft(game)) {
+    await updateGameByFilter(
+      { _id: game._id.toString() },
+      { status: "completed" }
+    );
+    await emitEvent([game._id.toString()], "complete-game", {
+      winer: game.players.findIndex((p) => p.status == "playing"),
+    });
+    return;
+  }
   let nextPlayerTurn = game.currentTurn + 1;
   if (nextPlayerTurn > game.players.length) {
     nextPlayerTurn = 1;
@@ -838,17 +855,21 @@ export const handleAiInsufficientBalance = async (
       }
       if (player.balance < 0) {
         await bankrupt(game, playerIndex);
+        finishPlayerTurn = true;
       }
     } else {
       await bankrupt(game, playerIndex);
+      finishPlayerTurn = true;
     }
   }
   return finishPlayerTurn;
 };
 
-export const bankrupt = async (game: IGame, playerIndex: number) => {
+export const resetGameDataForUserLeaveOrBankrupt = async (
+  game: IGame,
+  playerIndex: number
+) => {
   const player = game.players[playerIndex];
-  player.status = "bankrupt";
   const ownPropertyIndexes = player.properties.map((p) => p.index);
   const ownCommunityCardIndexes = player.cards
     .filter((c) => c.type == "community")
@@ -859,19 +880,52 @@ export const bankrupt = async (game: IGame, playerIndex: number) => {
   game.properties = game.properties.map((p) => {
     if (ownPropertyIndexes.includes(p.index)) {
       p.isAvailable = true;
+      p.owner = null;
     }
     return p;
   });
+  game.communityChests = game.communityChests.map((c) => {
+    if (ownCommunityCardIndexes.includes(c.index)) {
+      c.isAvailable = true;
+    }
+    return c;
+  });
+  game.chances = game.chances.map((c) => {
+    if (ownChanceCardIndexes.includes(c.index)) {
+      c.isAvailable = true;
+    }
+    return c;
+  });
   await updateGameByFilter(
     { _id: game._id.toString() },
-    { status: player.status }
+    {
+      players: game.players,
+      properties: game.properties,
+      communityChests: game.communityChests,
+      chances: game.chances,
+    }
   );
+};
+
+export const bankrupt = async (game: IGame, playerIndex: number) => {
+  const player = game.players[playerIndex];
+  player.status = "bankrupt";
+  await resetGameDataForUserLeaveOrBankrupt(game, playerIndex);
   await emitEvent([game._id.toString()], "player-bankrupt", {
     playerIndex,
   });
 };
 
-export const sortPlayerPropertiesByMostProfit = (
+export const leave = async (game: IGame, playerIndex: number) => {
+  const player = game.players[playerIndex];
+  player.status = "leave";
+  await resetGameDataForUserLeaveOrBankrupt(game, playerIndex);
+  await emitEvent([game._id.toString()], "player-leave", {
+    playerIndex,
+  });
+};
+
+export const sortPlayerPropertiesByLeastProfit = (
   playerProperties: IPlayerProperty[]
 ) => {
   playerProperties.sort((a, b) => {
@@ -896,7 +950,7 @@ export const sortPlayerPropertiesByMostProfit = (
     if (bRentalPrice) {
       bPrice = bRentalPrice.price;
     }
-    return bPrice - aPrice;
+    return aPrice - bPrice;
   });
 };
 
@@ -952,7 +1006,7 @@ export const sellHouseOrHotel = async (
         (bp) => bp.type == houseOrHotel
       )!.price / 2;
     player.balance += sellingPrice;
-    sortPlayerPropertiesByMostProfit(player.properties);
+    sortPlayerPropertiesByLeastProfit(player.properties);
     await updateGameByFilter(
       { _id: game._id },
       {
@@ -965,4 +1019,8 @@ export const sellHouseOrHotel = async (
       sellingPrice,
     });
   }
+};
+
+export const isOnlyOnePlayerLeft = (game: IGame) => {
+  return game.players.filter((p) => p.status == "playing").length <= 1;
 };

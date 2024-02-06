@@ -16,12 +16,19 @@ import { IGame } from "../../../../../../../models/game.model";
 import { board } from "../../../../../../../data/board";
 import getGameByIdMiddleware from "../../../../../../../middlewares/get-game-by-id.middleware";
 import isMyTurnMiddleware from "../../../../../../../middlewares/is-my-turn.middleware";
-import { throwInternalServerErrorException } from "purrts/lib/common";
+import {
+  throwBadRequestException,
+  throwInternalServerErrorException,
+} from "purrts/lib/common";
 
 export const handler: Handler = async (req, res) => {
   const game: IGame = (req as any).game;
   const playerIndex: number = (req as any).playerIndex;
   const player = game.players[playerIndex];
+
+  if (player.balance < 0) {
+    return throwBadRequestException("Insufficient balance!");
+  }
   const { total, numbers } = await playerRollDice(
     game._id.toString(),
     playerIndex
@@ -70,7 +77,7 @@ export const handler: Handler = async (req, res) => {
         return throwInternalServerErrorException("Invalid game property!");
       }
       if (gameProperty.owner != playerIndex) {
-        const owner = game.players[gameProperty.owner];
+        const owner = game.players[gameProperty.owner!];
         const ownerProperty = owner.properties.find(
           (p) => p.index == gameProperty.index
         )!;

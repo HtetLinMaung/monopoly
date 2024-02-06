@@ -18,7 +18,7 @@ export interface IGame {
 export interface IGameProperty {
   index: number;
   isAvailable: boolean;
-  owner: number;
+  owner: number | null;
 }
 
 export interface IPlayerState {

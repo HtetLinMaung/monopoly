@@ -3,6 +3,7 @@ import { IRouteMetadata } from "purrts/lib/types";
 import { board } from "../../../../../data/board";
 import { communityChests } from "../../../../../data/community-chests";
 import { chances } from "../../../../../data/chances";
+import { properties } from "../../../../../data/properties";
 
 export const handler: Handler = async (req, res) => {
   res.json({
@@ -12,6 +13,7 @@ export const handler: Handler = async (req, res) => {
       board,
       communityChests,
       chances,
+      properties,
     },
   });
 };
