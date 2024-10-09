@@ -32,3 +32,7 @@ export const getAuctionById = async (id: string) => {
 export const deleteAuctionById = async (id: string) => {
   return Auction.findByIdAndDelete(id);
 };
+
+export const deleteAllAuctions = async () => {
+  return Auction.deleteMany({});
+};

@@ -42,3 +42,7 @@ export const getPlayerIds = async (limit: number) => {
 //   });
 //   return !!player;
 // };
+
+export const deleteAllWaitLists = async () => {
+  return WaitList.deleteMany({});
+};

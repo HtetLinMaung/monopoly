@@ -184,3 +184,7 @@ export const addPlayerToGame = async (game: IGame, player: IPlayer) => {
   });
   await updateGameByFilter({ _id: game._id }, { players: game.players });
 };
+
+export const deleteAllGames = async () => {
+  return Game.deleteMany({});
+};

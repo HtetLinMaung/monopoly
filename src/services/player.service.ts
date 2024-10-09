@@ -35,3 +35,7 @@ export const getPlayersByIdList = async (idList: string[]) => {
     },
   });
 };
+
+export const deleteAllPlayers = async () => {
+  return Player.deleteMany({});
+};
